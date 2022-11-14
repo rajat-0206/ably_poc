@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="https://cdn.ably.com/lib/ably.min-1.js"></script>
+    <title>Ably POC</title>
+</head>
+<body>
+    <div id="organizer" style="display:none">
+    <textarea name="msg" id="messagebox" cols="30" rows="10"></textarea>
+    <button type="button" onclick="send_message()">Send</button>
+    </div>
+    <div class="messages" id="normal">
+        <h3>All the messages will come here</h3>
+    </div>
+
+</body>
+<script>
+    let channel = null;
+    const get_token = async (organizer=false)  => {
+    let response = await fetch("http://127.0.0.1:5000/get_token", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+                "client_type": organizer?"organizer":"normal",
+                "user_id": Math.random().toString(36).substring(7)
+            })
+        })
+        let data = await response.json()
+        let token = data.token;
+        return token;
+    }
+
+    window.onload = async () => {
+        let organizer = window.prompt("Are you the organizer? (y/n)")
+        if (organizer == "y"){
+            document.getElementById("organizer").style.display = "block"
+        }
+        const token = await get_token(organizer=="y")
+        console.log(token)
+        const ably = new Ably.Realtime.Promise({
+            authCallback: (data, callback) => {
+                callback(null, token)
+            }
+        });
+        await ably.connection.once('connected');
+        console.log('Connected to Ably!');
+        channel = ably.channels.get('ably_poc');
+
+        await channel.subscribe('ably_poc', (message) => {
+        console.log('Received a greeting message in realtime: ' + message.data)
+        put_message(message.data)
+});
+    }
+
+    const send_message = async () => {
+        let message = document.getElementById("messagebox").value
+        await channel.publish('ably_poc', message);
+        document.getElementById("messagebox").value = ""
+         //  backend patch call
+    }
+    const put_message = (message) => {
+        let div = document.createElement("div")
+        div.innerHTML = message
+        document.getElementById("normal").appendChild(div)
+       
+    }
+
+    
+
+
+
+</script>
+</html>
